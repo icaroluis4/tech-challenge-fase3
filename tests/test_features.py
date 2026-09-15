@@ -25,8 +25,20 @@ def test_sem_leakage(feats):
 
 
 def test_cobertura_externos(feats):
-    for col in ["populacao_2024", "pib", "idhm"]:
+    for col in ["populacao_2024", "pib", "va", "va_agropecuaria", "idhm", "share_va_agro"]:
         assert feats[col].notna().mean() >= 0.98, f"cobertura baixa em {col}"
+
+
+def test_nenhuma_feature_totalmente_nula(feats):
+    vazias = [c for c in feats.columns if feats[c].isna().all()]
+    assert not vazias, f"features 100% nulas: {vazias}"
+
+
+def test_escala_pib_per_capita(feats):
+    # PIB per capita municipal BR (2023) em R$: mediana ~ 20–40 mil
+    med = feats["pib_per_capita_2023"].median()
+    assert 15_000 < med < 60_000, f"mediana fora de escala: {med}"
+    assert feats["share_va_agro"].quantile(0.99) <= 1.0
 
 
 def test_derivadas_coerentes(feats):

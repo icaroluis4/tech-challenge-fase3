@@ -24,8 +24,8 @@ LEAKAGE_2025 = [
     "evolucao_2023_2025", "pc_participacao", "co_nivel_alfabetizacao",
 ]
 
-IDS = ["ID_ALUNO", "ID_ESCOLA", "co_municipio", "no_municipio", "NO_MUNICIPIO",
-       "nu_ano_avaliacao", "id_municipio"]
+IDS = ["ID_ALUNO", "ID_ESCOLA", "id_aluno", "id_escola",  # dataset_aluno é lowercase
+       "co_municipio", "no_municipio", "NO_MUNICIPIO", "nu_ano_avaliacao", "id_municipio"]
 
 BLACKLIST = set(LEAKAGE_ALUNO) | set(LEAKAGE_2025) | set(IDS)
 
