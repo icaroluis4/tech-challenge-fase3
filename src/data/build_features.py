@@ -82,6 +82,8 @@ def build_dataset_aluno(feats: pd.DataFrame | None = None) -> pd.DataFrame:
         feats = pd.read_parquet(DATA_PROCESSED / "features_municipio.parquet")
     aluno = pd.read_parquet(DATA_RAW / "aluno_presente.parquet")
     aluno = aluno.rename(columns=str.lower)  # CO_MUNICIPIO -> co_municipio etc.
+    # evita sufixos _x/_y: colunas do aluno são redundantes com as da feature store
+    aluno = aluno.drop(columns=["co_uf", "sg_uf"])
     n0 = len(aluno)
     df = aluno.merge(feats, on="co_municipio", how="inner", validate="m:1")
     log.info("aluno: %d -> %d após join (descartados %.2f%%)",
