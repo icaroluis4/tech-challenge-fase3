@@ -61,3 +61,35 @@ treinar com o passado e aplicar deslocando as features.
 `esforco_t`…). Treino: t=2025 (resultado_t1=pc_2024, target=atingiu_meta_2025).
 Projeção: t=2026 (resultado_t1=pc_2025, meta_t=meta_2026). O mesmo pipeline
 serializado serve aos dois momentos.
+
+## D7 — Correções na feature store descobertas pelos testes de pipeline (Fase 3)
+
+**Contexto:** ao ajustar o `ColumnTransformer` em dados reais, o `SimpleImputer`
+avisou que `va`, `va_agropecuaria`, `va_industria`, `va_servicos` e
+`share_va_agro` não tinham nenhum valor observado. Investigação na fonte
+(`basedosdados.br_ibge_pib.municipio`): o valor adicionado setorial só é
+publicado até **2021**; em 2022/2023 só existe `pib`. Além disso,
+`pib_per_capita_2023` estava com mediana ≈ R$ 29 milhões — o PIB da fonte
+já está em R$ correntes, não em mil R$.
+
+**Decisão:**
+1. `pib` continua de 2023 (último ano); VA setorial passa a vir de **2021**
+   (defasagem de 2 anos, proxy estrutural da composição econômica).
+2. `pib_per_capita_2023 = pib / populacao_2024` (sem `× 1000`). Mediana
+   resultante ≈ R$ 28,9 mil, coerente com IBGE.
+3. `share_va_agro` pode ser negativo (VA agropecuário negativo em ~1% dos
+   municípios); o ramo `log` do pré-processador usa `symlog1p` para não gerar NaN.
+4. Novos testes em `tests/test_features.py`: nenhuma coluna 100% nula e
+   PIB per capita dentro de escala plausível.
+
+## D8 — Pré-processamento dentro do `Pipeline` e duas visões de validação
+
+**Decisão:** `build_preprocessor()` (imputação mediana/moda + `symlog1p` em
+contagens + `StandardScaler` + `OneHotEncoder(handle_unknown="ignore")`) é
+sempre o primeiro step do `Pipeline` do estimador — imputação e scaling só
+aprendem no `fit` do treino e são serializados junto com o modelo (`joblib`).
+Cada modelo reporta **holdout estratificado 80/20 + `StratifiedKFold(5)`**
+(desempenho médio) **e `GroupKFold`** por município (aluno) ou UF (município)
+— generalização para território nunca visto, que é o número relevante para
+o gestor público.
+

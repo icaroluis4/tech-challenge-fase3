@@ -60,7 +60,8 @@ def extract_externos(force: bool = False) -> pd.DataFrame:
     )
     SELECT g.id_municipio,
            pop.populacao AS populacao_2024,
-           pib.pib, pib.va, pib.va_agropecuaria, pib.va_industria, pib.va_servicos,
+           pib.pib,
+           va.va, va.va_agropecuaria, va.va_industria, va.va_servicos,
            adh.idhm, adh.idhm_e, adh.idhm_l, adh.idhm_r, adh.indice_gini, adh.renda_pc,
            adh.taxa_analfabetismo_15_mais, adh.expectativa_anos_estudo,
            dir.nome_regiao_imediata, dir.nome_regiao_intermediaria, dir.capital_uf
@@ -68,8 +69,13 @@ def extract_externos(force: bool = False) -> pd.DataFrame:
     LEFT JOIN (SELECT id_municipio, populacao
                FROM `basedosdados.br_ibge_populacao.municipio` WHERE ano = 2024) pop
       USING (id_municipio)
-    LEFT JOIN (SELECT id_municipio, pib, va, va_agropecuaria, va_industria, va_servicos
+    -- PIB total: último ano disponível (2023)
+    LEFT JOIN (SELECT id_municipio, pib
                FROM `basedosdados.br_ibge_pib.municipio` WHERE ano = 2023) pib
+      USING (id_municipio)
+    -- Valor adicionado setorial: só existe até 2021 na Base dos Dados (2022/2023 nulos)
+    LEFT JOIN (SELECT id_municipio, va, va_agropecuaria, va_industria, va_servicos
+               FROM `basedosdados.br_ibge_pib.municipio` WHERE ano = 2021) va
       USING (id_municipio)
     LEFT JOIN (SELECT id_municipio, idhm, idhm_e, idhm_l, idhm_r, indice_gini, renda_pc,
                       taxa_analfabetismo_15_mais, expectativa_anos_estudo
@@ -84,6 +90,7 @@ def extract_externos(force: bool = False) -> pd.DataFrame:
     cov = {
         "populacao_2024": df["populacao_2024"].notna().mean(),
         "pib": df["pib"].notna().mean(),
+        "va_2021": df["va"].notna().mean(),
         "idhm": df["idhm"].notna().mean(),
         "diretorios": df["nome_regiao_intermediaria"].notna().mean(),
     }

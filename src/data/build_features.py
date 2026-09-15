@@ -62,7 +62,9 @@ def build_features_municipio() -> pd.DataFrame:
     # --- populacional / socioeconômico ---
     df["log_populacao"] = np.log1p(df["populacao_2024"])
     df["porte"] = _porte(df["populacao_2024"])
-    df["pib_per_capita_2023"] = df["pib"] * 1000.0 / df["populacao_2024"]  # pib em mil R$
+    # pib da Base dos Dados já está em R$ correntes (média BR ≈ R$ 39 mil/hab)
+    df["pib_per_capita_2023"] = df["pib"] / df["populacao_2024"]
+    # VA setorial só existe até 2021 na fonte (ver extract_externos)
     df["share_va_agro"] = df["va_agropecuaria"] / df["va"]
 
     # --- separa targets 2025 (nunca entram como feature) ---
