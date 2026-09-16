@@ -158,3 +158,31 @@ a comparação de candidatos e a busca de hiperparâmetros rodam em 150k
 completa pode ser usada com `--n-sample 0`. Toda a amostragem é semeada
 (`SEED=42`) e coberta por teste de reprodutibilidade.
 
+
+
+## D13 — Modelo B: ablação do bloco de histórico e leitura da projeção 2026
+
+**Contexto:** prever `atingiu_meta` é "fácil demais" por inércia — quem já
+está longe da meta tende a continuar longe. Sem ablação, não sabemos se o
+modelo aprendeu algo além de `resultado_t1`. E a projeção 2026 precisa de
+checagens de coerência antes de virar ranking de gestão.
+
+**Decisão:**
+
+1. **Ablação obrigatória** (`_ablacao_sem_historico`): o melhor modelo é
+   retreinado sem `resultado_t1/t2`, `delta_t1`, `meta_t`, `esforco_t` e
+   `atingiu_t1` — só Censo, IBGE, ADH e território. Resultado (holdout):
+   AUC 0,852 → 0,790 sem histórico. Ou seja, boa parte do ganho sobre o acaso
+   vem da inércia do resultado, mas o contexto socioeconômico **sozinho**
+   ainda entrega AUC 0,79 — sinal preditivo real, não só repetição do passado.
+2. **Sanidade da projeção 2026** (`predict_2026._sanidade`): Spearman entre
+   `p_nao_atingir_2026` e `esforco_2026` = 0,78 (forte e positiva, como
+   esperado); risco médio de quem falhou 2025 = 0,67 vs 0,14 de quem atingiu.
+3. **Calibração importa aqui**: as probabilidades viram ranking de prioridade
+   de gestão. ECE do modelo final = 0,018 (logreg sem `class_weight`) — bom o
+   suficiente para ler as probabilidades como frequências aproximadas, sem
+   necessidade de `CalibratedClassifierCV`.
+4. **Concentração no RS é sinal, não artefato**: o RS teve a pior taxa de
+   atingimento 2025 do país (27,9% vs 72,5% nacional) e esforço 2026 médio de
+   +10,5 p.p. (Brasil: −3,4). O top-100 do ranking ter 88 municípios do RS
+   reflete o choque real de 2025 no estado — registrado para defesa no vídeo.

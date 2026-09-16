@@ -4,7 +4,7 @@
 > continuar. O plano completo está em `../PLANO_IMPLEMENTACAO.md` (pasta `Desafio3/`).
 > Atualize este arquivo ao fim de cada fase.
 
-Última atualização: 2026-09-15 — **Fases 0–4 concluídas. Próxima: Fase 5 (Modelo B — risco de meta + projeção 2026).**
+Última atualização: 2026-09-15 — **Fases 0–5 concluídas. Próxima: Fase 6 (clusterização de municípios).**
 
 ---
 
@@ -17,12 +17,12 @@
 | 2 | EDA municipal e por aluno | ✅ concluída (PR #2) |
 | 3 | Pipeline de pré-processamento (`transformers.py`, `splits.py`) + testes | ✅ concluída (PR #3) |
 | 4 | Modelo A — aluno (`train_aluno.py`, `metrics.py`) + relatório | ✅ concluída (PR #4) |
-| **5** | **Modelo B — risco de meta + projeção 2026** | ⏭️ **PRÓXIMA** |
-| 6 | Clusterização de municípios | ⬜ |
+| 5 | Modelo B — risco de meta (`train_risco_meta.py`, `predict_2026.py`) + ranking 2026 | ✅ concluída (PR #5) |
+| **6** | **Clusterização de municípios** | ⏭️ **PRÓXIMA** |
 | 7 | Interpretabilidade (permutation importance + SHAP) | ⬜ |
 | 8 | README final, decisões, roteiro do vídeo, `run_all.py` | ⬜ |
 
-Git: `main` após PR #4 (ver `git log`). 4 PRs mergeados (squash). Repo:
+Git: `main` após PR #5 (ver `git log`). 5 PRs mergeados (squash). Repo:
 `https://github.com/icaroluis4/tech-challenge-fase3` (privado).
 
 ---
@@ -80,8 +80,11 @@ cd "c:\Users\icaro\OneDrive\Área de Trabalho\Projetos\FIAP\Desafio3\tech-challe
 | `tests/test_pipeline.py` | 12 testes: fit/predict_proba com NaN em dtypes nullable, sem NaN pós-transform, categoria desconhecida, roundtrip joblib, `scale=False`, splits, GroupKFold sem vazamento, CV reprodutível, amostragem, pipeline em features reais. Verdes. |
 | `tests/test_metrics.py` | 18 testes: métricas perfeitas/aleatórias, espelhamento de classe, thresholds F1 e custo, calibração/ECE, `cv_report` com e sem grupos, markdown. Verdes. |
 | `tests/test_train_aluno.py` | 27 testes: features sem leakage, todos os candidatos treinam/predizem, dummy = prevalência, roundtrip joblib, grades válidas, gap da curva ≥0, agregação municipal, `treinar()` fim a fim sem salvar, reprodutibilidade, correlações municipais com/sem massa. Verdes. |
+| `src/modeling/train_risco_meta.py` | Fase 5 inteira: `montar_matriz_t(features, targets, t)` (esquema genérico 2025/2026, dropa ano explícito, `assert_no_leakage`), `make_candidates`/`param_distributions` (sem `class_weight` — base 72/28), `_ablacao_sem_historico` (D13), `treinar(df, TrainConfig)` → `TrainResult`, `_salvar_artefatos`, `_escrever_relatorio`. CLI `--fast`, `--no-save`. Constantes `HISTORICO_COLS`, `EXTRA_DROP=("co_uf",)`, `CUSTO_MISS_RISCO=5`. |
+| `src/modeling/predict_2026.py` | `projetar_2026()` → ranking 5.500 municípios; `_sanidade()` (Spearman risco×esforço, risco médio por desfecho 2025); grava `reports/ranking_risco_2026.csv`. |
+| `tests/test_train_risco_meta.py` | 16 testes: matriz t=2025/2026 (bloco genérico, drops, valores, leakage, ano inválido), features/candidatos/grades, ablação (estrutura + não melhora), fim a fim sem salvar, reprodutibilidade, roundtrip joblib, sanidade do ranking. Verdes. |
 
-**Total: 109 testes verdes** (`pytest tests -q`, ~20 s).
+**Total: 125 testes verdes** (`pytest tests -q`, ~55 s).
 
 ### Modelo A — resultado (treino completo, 400k, 33 min)
 | Métrica | Valor |
@@ -98,6 +101,22 @@ cd "c:\Users\icaro\OneDrive\Área de Trabalho\Projetos\FIAP\Desafio3\tech-challe
 
 Modelos não triviais ficam a ≤0,01 de AUC entre si → o limite é a informação
 (ICC≈0,08), não a classe de modelo. Enquadramento oficial: *score de risco contextual*.
+
+### Modelo B — resultado (backtest 2025, 16 s)
+| Métrica | Valor |
+|---|---|
+| Melhor candidato (StratifiedKFold 5) | **`logreg`** AUC 0,8171 (RF 0,805, hist_gb 0,799, lgbm 0,798, dummy 0,50) |
+| Hiperparâmetros | `C=4,33` (único param da grade — espaço < n_iter) |
+| **Holdout 20% (1.084 mun.)** | **ROC-AUC 0,852** · PR-AUC risco 0,704 · Brier 0,133 |
+| **Ablação sem histórico (D13)** | **ROC-AUC 0,790** holdout (CV 0,749) → contexto socioeconômico sozinho ainda prediz |
+| Threshold custo 5:1 (adotado) | 0,814 → recall_risco 86,6 %, precision_risco 49,6 % |
+| Calibração | **ECE 0,018** — probabilidades legíveis como frequências (sem recalibração) |
+| Projeção 2026 | Spearman(risco, esforço) = **0,784**; risco médio: falhou 2025 = **0,665** vs atingiu = **0,142** |
+| Ranking 2026 | 5.500 municípios; top-100 com 88 do RS — **sinal real**: RS teve pior atingimento 2025 (27,9 %) e esforço 2026 médio +10,5 p.p. (Brasil −3,4) |
+
+`models/modelo_risco_meta.joblib` (gitignored) — regenerar com
+`python -m src.modeling.train_risco_meta` (~16 s). Ranking:
+`python -m src.modeling.predict_2026` → `reports/ranking_risco_2026.csv`.
 
 ### Dados (gitignored — regenerar com os comandos acima)
 | Arquivo | Linhas | Cols |
@@ -148,6 +167,9 @@ best_params, thresholds, target, seed}`. Regenerar com `python -m src.modeling.t
 | G14 | `infer_feature_columns(extra_drop=("co_uf",))` → **50 numéricas + 5 categóricas** no dataset_aluno. |
 | G15 | Threshold max-F1 na classe 1 (0,27) sinaliza <4 % dos não alfabetizados — F1 na classe majoritária é métrica errada para este problema; sempre usar `*_risco` ou custo. |
 | G16 | Média de proba por município correlaciona 0,886 com a taxa observada quando n≥30 alunos no holdout; sem o corte, erro binomial derruba para 0,51. |
+| G17 | **Modelo B: logreg vence** (AUC CV 0,817 vs ~0,80 dos boosts) — base pequena (5,4k) + sinal essencialmente linear (esforço/resultado). AUC holdout 0,852; ablação sem histórico 0,790. |
+| G18 | **RS é outlier estrutural de 2025**: atingimento 27,9% (pior UF; Brasil 72,5%), esforço 2026 médio +10,5 p.p. (Brasil −3,4) → domina o top do ranking 2026 (88/100). É sinal, não artefato (D13). |
+| G19 | Modelo B calibrado de fábrica: ECE 0,018 com logreg sem `class_weight` — não precisa de `CalibratedClassifierCV`. |
 
 ### Nomes de colunas (importante!)
 - `features_municipio` / `targets_municipio`: **snake_case minúsculo** (`co_municipio`, `sg_uf`, `pc_alfabetizado_2024`, `regiao`, `porte`, `idhm_e`, …).
@@ -169,54 +191,22 @@ best_params, thresholds, target, seed}`. Regenerar com `python -m src.modeling.t
 
 ---
 
-## 5. Próximo passo — Fase 5: Modelo B (risco de meta) — detalhado
+## 5. Próximo passo — Fase 6: Clusterização de municípios — detalhado
 
-Branch: `feature/modelo-risco-meta`. Arquivos: `src/modeling/train_risco_meta.py`,
-`src/modeling/predict_2026.py`. Plano completo em `../PLANO_IMPLEMENTACAO.md` §Fase 5.
+Branch: `feature/clusters`. Arquivo: `src/modeling/cluster_municipios.py`.
+Plano completo em `../PLANO_IMPLEMENTACAO.md` §Fase 6.
 
-Reaproveitar da Fase 4 (**não reescrever**):
-```python
-from src.evaluation.metrics import evaluate_binary, cv_report, best_threshold_cost, calibration_table, metrics_frame, to_markdown
-from src.visualization.plots import plot_roc_pr, plot_calibration, plot_confusion, plot_metric_bars, save_fig
-from src.preprocessing.splits import split_municipio, stratified_cv
-from src.preprocessing.transformers import infer_feature_columns, build_preprocessor
-```
-`evaluate_binary` já devolve `*_risco` (classe 0 = não atingiu como positiva) — é o
-que a Fase 5 precisa. `train_aluno.py` serve de gabarito estrutural
-(`TrainConfig`/`TrainResult`, `_comparar_candidatos`, `_buscar_hiperparametros`,
-`_salvar_artefatos`, `_escrever_relatorio`).
-
-1. **Renomear para o esquema genérico em t** (função `montar_matriz_t(features, targets, t)`):
-   `resultado_t1`, `resultado_t2`, `delta_t1`, `meta_t`, `esforco_t`, `atingiu_t1`;
-   demais features (Censo/IBGE/ADH/território) estáticas. **Dropar** colunas de ano
-   explícito (`pc_alfabetizado_2023/2024`, `meta_2025/2026`, `delta_2023_2024`,
-   `gap_meta_2024`, `esforco_2025`, `ambicao_2030`, `atingiu_meta_2024`) para não
-   duplicar informação nem vazar 2025 — conferir com `assert_no_leakage`.
-2. Treino t=2025: `X = montar_matriz_t(..., 2025)`, `y = atingiu_meta_2025` de
-   `targets_municipio.parquet` (5.417 rotulados, 72,5 % positivos — G5).
-   `split_municipio` (dropa nulos) + `StratifiedKFold(5)`.
-3. Candidatos: dummy, `LogisticRegression(balanced, scale=True)`, `HistGB`, `RF`, `LGBM`.
-   `RandomizedSearchCV(n_iter=25, scoring="roc_auc")`. Base pequena → treino rápido,
-   pode usar `RepeatedStratifiedKFold` para reduzir variância.
-4. **Ablação obrigatória** (risco "fácil demais" por inércia de `resultado_t1`):
-   treinar também **sem histórico** (só contexto socioeconômico) e reportar as duas
-   AUCs lado a lado. Mostra o valor incremental do socioeconômico.
-5. Métricas: ROC-AUC, **PR-AUC da classe não-atingiu** (`pr_auc_risco`), Brier,
-   calibração (se ECE alto, `CalibratedClassifierCV(method="isotonic")` — aqui as
-   probabilidades viram ranking de prioridade, então calibração importa mais que na Fase 4).
-6. `predict_2026.py`: `montar_matriz_t(..., 2026)` com `resultado_t1 =
-   pc_alfabetizado_aeeb_2025` (de `targets_municipio`), `meta_t = meta_2026`;
-   `predict_proba` → `reports/ranking_risco_2026.csv`
-   (`co_municipio, no_municipio, sg_uf, p_nao_atingir_2026, meta_2026, pc_2025, esforco_2026`),
-   ordenado desc. Top-50 vai para o README.
-7. Sanidade: `Spearman(p_nao_atingir_2026, esforco_2026) > 0` forte; quem não
-   atingiu 2025 deve ter risco médio 2026 maior. Registrar em D13.
-8. Salvar `models/modelo_risco_meta.joblib`; `reports/resultados_modelo_risco_meta.md`;
-   imagens `modelo_meta_01..`; `PROGRESS.md`; PR
-   `feat(model): modelo de risco de não atingimento de meta com backtest 2025 e projeção 2026`.
-
-Cuidados já conhecidos: `atingiu_meta_2025` é boolean nullable → `dropna().astype(int)`;
-`porte` é `category` com NaN; `groupby(observed=True)`.
+1. Features: histórico (2023/2024), rede, infraestrutura, socioeconômico.
+   **Excluir** metas e UF/região do fit (queremos padrões, não geografia forçada).
+   Pré-processar com o mesmo `build_preprocessor` (imputação + scaling).
+2. `KMeans` com k ∈ [3..8]; escolher por silhouette + elbow; comparar com
+   `AgglomerativeClustering`.
+3. Perfilar clusters: média de cada feature por cluster, distribuição por região,
+   taxa de atingimento 2025 por cluster (validação externa — não usada no fit).
+   Nomear clusters (ex.: "alto desempenho urbano", "vulnerável rural NE", …).
+4. Validar H5 *a posteriori*. Saída: `reports/clusters_municipios.csv`
+   (`co_municipio, cluster, nome_cluster`) + join no ranking da Fase 5.
+5. PR `feat(model): clusterização de municípios por perfil socioeconômico e de rede`.
 
 ### Fluxo de PR usado (repetir)
 ```powershell
@@ -235,11 +225,11 @@ git checkout main -q; git pull -q
 
 - **Fase 4 (aluno) — feito.** Não retreinar sem motivo (33 min). Se precisar do
   modelo: `joblib.load(MODELS_DIR / "modelo_aluno.joblib")["pipeline"]`.
-- **Fase 5 (meta):** renomear features para o esquema genérico em `t`
-  (`resultado_t1`, `resultado_t2`, `delta_t1`, `meta_t`, `esforco_t`, `atingiu_t1`).
-  Treino t=2025 → projeção t=2026 com `meta_2026` e `pc_alfabetizado_aeeb_2025`
-  (que vem de `targets_municipio.parquet`). Gerar `reports/ranking_risco_2026.csv`.
-  Sanidade: Spearman(`p_nao_atingir_2026`, `esforco_2026`) > 0.
+- **Fase 5 (meta) — feito.** Não retreinar sem motivo (16 s). Modelo:
+  `joblib.load(MODELS_DIR / "modelo_risco_meta.joblib")["pipeline"]`; ranking já
+  gerado em `reports/ranking_risco_2026.csv`. Gotcha resolvido: o drop de colunas
+  de ano explícito usa `startswith("meta_")` → **excluir as genéricas** (`meta_t`,
+  `esforco_t`) do filtro, senão `meta_t` é dropada logo após ser criada.
 - **Fase 6 (clusters):** excluir metas e UF/região do fit; k ∈ [3..8] por silhouette;
   validar H5 *a posteriori*.
 - **Fase 7:** permutation importance + SHAP nos dois modelos (Modelo A: usar amostra
