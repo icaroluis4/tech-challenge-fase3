@@ -2,6 +2,7 @@ data/raw/
 data/processed/
 models/*.joblib
 reports/_*.txt
+PROGRESS.md
 .env
 .venv/
 __pycache__/
