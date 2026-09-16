@@ -1,6 +1,7 @@
 data/raw/
 data/processed/
 models/*.joblib
+reports/_*.txt
 .env
 .venv/
 __pycache__/

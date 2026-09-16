@@ -4,7 +4,7 @@
 > continuar. O plano completo está em `../PLANO_IMPLEMENTACAO.md` (pasta `Desafio3/`).
 > Atualize este arquivo ao fim de cada fase.
 
-Última atualização: 2026-09-15 — **Fases 0–3 concluídas. Próxima: Fase 4 (Modelo A — aluno).**
+Última atualização: 2026-09-15 — **Fases 0–4 concluídas. Próxima: Fase 5 (Modelo B — risco de meta + projeção 2026).**
 
 ---
 
@@ -16,13 +16,13 @@
 | 1 | Extração BQ + feature store municipal | ✅ concluída (PR #1) |
 | 2 | EDA municipal e por aluno | ✅ concluída (PR #2) |
 | 3 | Pipeline de pré-processamento (`transformers.py`, `splits.py`) + testes | ✅ concluída (PR #3) |
-| **4** | **Modelo A — aluno** | ⏭️ **PRÓXIMA** |
-| 5 | Modelo B — risco de meta + projeção 2026 | ⬜ |
+| 4 | Modelo A — aluno (`train_aluno.py`, `metrics.py`) + relatório | ✅ concluída (PR #4) |
+| **5** | **Modelo B — risco de meta + projeção 2026** | ⏭️ **PRÓXIMA** |
 | 6 | Clusterização de municípios | ⬜ |
 | 7 | Interpretabilidade (permutation importance + SHAP) | ⬜ |
 | 8 | README final, decisões, roteiro do vídeo, `run_all.py` | ⬜ |
 
-Git: `main` após PR #3 (ver `git log`). 3 PRs mergeados (squash). Repo:
+Git: `main` após PR #4 (ver `git log`). 4 PRs mergeados (squash). Repo:
 `https://github.com/icaroluis4/tech-challenge-fase3` (privado).
 
 ---
@@ -34,7 +34,13 @@ cd "c:\Users\icaro\OneDrive\Área de Trabalho\Projetos\FIAP\Desafio3\tech-challe
 .\.venv\Scripts\python.exe -m pytest tests -q
 .\.venv\Scripts\python.exe -m src.data.build_features
 .\.venv\Scripts\python.exe -m jupyter execute --inplace notebooks/01_eda_municipio.ipynb
+.\.venv\Scripts\python.exe -m src.modeling.train_aluno --fast --no-save   # smoke (~1 min)
+.\.venv\Scripts\python.exe -m src.modeling.train_aluno                    # completo (~33 min)
 ```
+
+- Rodar scripts soltos que importam `src` exige `$env:PYTHONPATH="."` (ou usar `-m`).
+- Log longo de treino: `... 2>&1 | Tee-Object -FilePath reports\_x.txt` cria UTF-16 —
+  ler com `Get-Content`, não com ferramentas que esperam UTF-8. `reports/_*.txt` é gitignored.
 
 - venv: **Python 3.11.8** em `.venv` (sklearn 1.9.1, lightgbm 4.7.0, shap 0.51.0, pyarrow 25.0.1).
 - Kernel Jupyter registrado: **`fase3_venv`** ("Python 3.11 (fase3)"). Os dois
@@ -66,12 +72,32 @@ cd "c:\Users\icaro\OneDrive\Área de Trabalho\Projetos\FIAP\Desafio3\tech-challe
 | `src/preprocessing/leakage.py` | `LEAKAGE_ALUNO`, `LEAKAGE_2025`, `IDS`, `BLACKLIST`, `assert_no_leakage(columns, allow=None)`. |
 | `src/preprocessing/transformers.py` | `infer_feature_columns(df, target, extra_drop)` → `(num_cols, cat_cols)` já sem BLACKLIST/descritivas; `build_preprocessor(num, cat, scale=True, min_frequency=20)` → `ColumnTransformer` com ramos `log` (mediana→symlog1p→scaler), `num` (mediana→scaler), `cat` (moda→OHE dense, `handle_unknown="ignore"`); `get_feature_names(pre)`. Constantes: `CATEGORICAL_COLS`, `LOG1P_COLS`, `DESCRIPTIVE_COLS`. |
 | `src/preprocessing/splits.py` | `Split` dataclass (`X_train/X_test/y_train/y_test/groups_*`, `.summary()`); `split_aluno(df)`, `split_municipio(df)` (dropa nulos do target), `stratified_cv()`, `group_cv()`, `sample_aluno(df, n=400_000)` estratificada por `(sg_uf, in_alfabetizado)`. |
-| `src/visualization/plots.py` | tema seaborn + `save_fig(fig, path)` (backend Agg). |
+| `src/visualization/plots.py` | tema seaborn + `save_fig(fig, path)` (backend Agg); `plot_roc_pr`, `plot_calibration`, `plot_confusion`, `plot_learning_curve`, `plot_metric_bars`. |
+| `src/evaluation/metrics.py` | `evaluate_binary(y, proba, threshold)` → dict (ROC/PR-AUC, F1, bal. acc, Brier, log_loss, matriz + versões `_risco` com classe 0 positiva, `miss_risco`/`falso_alarme`); `best_threshold_f1`, `best_threshold_cost(y, p, c_fn, c_fp)`, `calibration_table` (attrs `ece`), `expected_calibration_error`, `cv_report(pipe, X, y, cv, groups)` → `CVResult(mean, std, summary())`, `metrics_frame`, `to_markdown`. |
+| `src/modeling/train_aluno.py` | Fase 4 inteira: `carregar_dataset`, `make_candidates` (dummy/logreg/hist_gb/random_forest/lgbm), `param_distributions`, `learning_curve_boosting`, `agregado_municipal`, `treinar(df, TrainConfig)` → `TrainResult`, `_salvar_artefatos`, `_escrever_relatorio`. CLI `--fast`, `--no-save`, `--n-sample`, `--cv-sample`, `--n-iter`. Constantes `EXTRA_DROP=("co_uf",)`, `CUSTO_MISS_RISCO=5`, `MIN_ALUNOS_AGG=30`. |
 | `tests/test_leakage.py` | 48 casos parametrizados. Verdes. |
 | `tests/test_features.py` | grão único, 5.500 linhas, cobertura externos ≥98%, derivadas coerentes, **nenhuma coluna 100% nula, escala do PIB per capita**. Verdes. |
 | `tests/test_pipeline.py` | 12 testes: fit/predict_proba com NaN em dtypes nullable, sem NaN pós-transform, categoria desconhecida, roundtrip joblib, `scale=False`, splits, GroupKFold sem vazamento, CV reprodutível, amostragem, pipeline em features reais. Verdes. |
+| `tests/test_metrics.py` | 18 testes: métricas perfeitas/aleatórias, espelhamento de classe, thresholds F1 e custo, calibração/ECE, `cv_report` com e sem grupos, markdown. Verdes. |
+| `tests/test_train_aluno.py` | 27 testes: features sem leakage, todos os candidatos treinam/predizem, dummy = prevalência, roundtrip joblib, grades válidas, gap da curva ≥0, agregação municipal, `treinar()` fim a fim sem salvar, reprodutibilidade, correlações municipais com/sem massa. Verdes. |
 
-**Total: 62 testes verdes** (`pytest tests -q`).
+**Total: 109 testes verdes** (`pytest tests -q`, ~20 s).
+
+### Modelo A — resultado (treino completo, 400k, 33 min)
+| Métrica | Valor |
+|---|---|
+| Melhor candidato (StratifiedKFold 5, 150k) | `hist_gb` AUC 0,6595 (lgbm/RF 0,6594, logreg 0,6524, dummy 0,50) |
+| Hiperparâmetros | `max_iter=300, learning_rate=0.02, max_leaf_nodes=63, min_samples_leaf=50, l2=20, max_features=0.6` |
+| **Holdout 20% (80k)** | **ROC-AUC 0,666** · PR-AUC 0,795 · PR-AUC risco 0,484 · Brier 0,229 |
+| **GroupKFold por município** | **ROC-AUC 0,647** (número honesto) |
+| Threshold custo 5:1 (adotado, D9) | 0,727 → recall_risco 97,3 %, precision_risco 36,2 % |
+| Threshold max-F1 | 0,2725 → recall_risco 3,8 % (inútil — documentado) |
+| Calibração | ECE 0,147; `class_weight=balanced` subestima P(alfabetizado) → só ordenar, não ler como frequência |
+| Curva overfit | validação máxima em `max_iter=200`; gap final 0,040 |
+| Agregado municipal (holdout) | Pearson 0,51 (5.124 mun.) · **0,886 em 486 mun. com n≥30** · MAE 0,22 |
+
+Modelos não triviais ficam a ≤0,01 de AUC entre si → o limite é a informação
+(ICC≈0,08), não a classe de modelo. Enquadramento oficial: *score de risco contextual*.
 
 ### Dados (gitignored — regenerar com os comandos acima)
 | Arquivo | Linhas | Cols |
@@ -86,11 +112,19 @@ cd "c:\Users\icaro\OneDrive\Área de Trabalho\Projetos\FIAP\Desafio3\tech-challe
 
 Também materializado no BQ: `semiotic-primer-366516.gold_ml.features_municipio`.
 
+`models/modelo_aluno.joblib` (2,2 MB, gitignored) — dict `{pipeline, best_name,
+best_params, thresholds, target, seed}`. Regenerar com `python -m src.modeling.train_aluno`.
+
 ### Docs/relatórios
-- `docs/decisoes_analiticas.md` — **D1..D6** já escritas.
+- `docs/decisoes_analiticas.md` — **D1..D12** escritas (D8 pipeline+2 validações,
+  D9 custo 5:1, D10 métricas espelhadas na classe de risco, D11 correlação municipal
+  com corte n≥30, D12 amostra 400k).
 - `reports/eda_municipio.md` — achados + hipóteses **H1–H5**.
 - `reports/evidencia_leakage_proficiencia.md` — tabela min/max de proficiência por classe.
-- `images/` — 11 arquivos: `eda_01..08` (município, um deles HTML do mapa) + `eda_aluno_01..03`.
+- `reports/resultados_modelo_aluno.md` (+ `.json` com métricas brutas,
+  `modelo_aluno_agregado_municipal.csv`) — relatório completo do Modelo A (8 seções).
+- `images/` — 16 arquivos: `eda_01..08`, `eda_aluno_01..03`, `modelo_aluno_01..05`
+  (ROC/PR, calibração, confusão, curva overfit, candidatos).
 
 ---
 
@@ -109,6 +143,11 @@ Também materializado no BQ: `semiotic-primer-366516.gold_ml.features_municipio`
 | G9 | `pib` da fonte já está em **R$** (não mil R$): `pib_per_capita_2023 = pib/pop` → mediana R$ 28,9 mil. Bug de `×1000` corrigido (D7). |
 | G10 | `va_agropecuaria` é **negativo** em ~1% dos municípios → `share_va_agro` < 0; o ramo `log` usa `symlog1p` para não gerar NaN. |
 | G11 | `capital_uf` é 0/1 (`Int64`) mas tratado como **categórica**; `tp_dependencia` só tem valores 2 (estadual) e 3 (municipal) entre presentes. |
+| G12 | **Modelo A: AUC 0,666 holdout / 0,647 GroupKFold**, todos os não triviais dentro de 0,01 → teto informacional confirmado (ver G3). Não vale gastar mais tempo em tuning. |
+| G13 | Em 60k linhas (`--fast`) a logreg vence; em 150k+ o boosting passa à frente por ~0,007. Efeito de tamanho de amostra, não de modelo. |
+| G14 | `infer_feature_columns(extra_drop=("co_uf",))` → **50 numéricas + 5 categóricas** no dataset_aluno. |
+| G15 | Threshold max-F1 na classe 1 (0,27) sinaliza <4 % dos não alfabetizados — F1 na classe majoritária é métrica errada para este problema; sempre usar `*_risco` ou custo. |
+| G16 | Média de proba por município correlaciona 0,886 com a taxa observada quando n≥30 alunos no holdout; sem o corte, erro binomial derruba para 0,51. |
 
 ### Nomes de colunas (importante!)
 - `features_municipio` / `targets_municipio`: **snake_case minúsculo** (`co_municipio`, `sg_uf`, `pc_alfabetizado_2024`, `regiao`, `porte`, `idhm_e`, …).
@@ -130,41 +169,54 @@ Também materializado no BQ: `semiotic-primer-366516.gold_ml.features_municipio`
 
 ---
 
-## 5. Próximo passo — Fase 4: Modelo A (aluno) — detalhado
+## 5. Próximo passo — Fase 5: Modelo B (risco de meta) — detalhado
 
-Branch: `feature/modelo-aluno`. Arquivo: `src/modeling/train_aluno.py` (+ `src/evaluation/metrics.py`).
+Branch: `feature/modelo-risco-meta`. Arquivos: `src/modeling/train_risco_meta.py`,
+`src/modeling/predict_2026.py`. Plano completo em `../PLANO_IMPLEMENTACAO.md` §Fase 5.
 
-Receita de uso do que já existe:
+Reaproveitar da Fase 4 (**não reescrever**):
 ```python
-from src.preprocessing.splits import split_aluno, sample_aluno, stratified_cv, group_cv
+from src.evaluation.metrics import evaluate_binary, cv_report, best_threshold_cost, calibration_table, metrics_frame, to_markdown
+from src.visualization.plots import plot_roc_pr, plot_calibration, plot_confusion, plot_metric_bars, save_fig
+from src.preprocessing.splits import split_municipio, stratified_cv
 from src.preprocessing.transformers import infer_feature_columns, build_preprocessor
-df = pd.read_parquet(DATA_PROCESSED / "dataset_aluno.parquet")
-df = sample_aluno(df, n=400_000)                 # experimentação
-sp = split_aluno(df)                             # holdout 80/20, groups=co_municipio
-num, cat = infer_feature_columns(sp.X_train)     # id_aluno/co_municipio já saem via BLACKLIST
-pipe = Pipeline([("pre", build_preprocessor(num, cat, scale=False)), ("model", LGBMClassifier(...))])
 ```
-> `id_aluno`/`id_escola` (minúsculos) já foram adicionados a `IDS` em `leakage.py`.
+`evaluate_binary` já devolve `*_risco` (classe 0 = não atingiu como positiva) — é o
+que a Fase 5 precisa. `train_aluno.py` serve de gabarito estrutural
+(`TrainConfig`/`TrainResult`, `_comparar_candidatos`, `_buscar_hiperparametros`,
+`_salvar_artefatos`, `_escrever_relatorio`).
 
-1. **`src/evaluation/metrics.py`**: `evaluate_binary(y_true, proba, threshold)` →
-   dict com ROC-AUC, PR-AUC, F1, balanced acc, Brier, matriz de confusão;
-   `best_threshold_f1(y, proba)`; `calibration_table(y, proba, bins=10)`;
-   `cv_report(pipe, X, y, cv, groups=None)` → média±dp por métrica.
-2. Candidatos (todos em `Pipeline(pre, model)`): `DummyClassifier(most_frequent)`
-   (piso 66,2%), `LogisticRegression(class_weight="balanced", max_iter=2000)` com
-   `scale=True`, `HistGradientBoostingClassifier` / `LGBMClassifier(class_weight="balanced")`
-   com `scale=False`, `RandomForestClassifier(300, min_samples_leaf=50, n_jobs=-1)`.
-3. `RandomizedSearchCV(n_iter=25, cv=stratified_cv(), scoring="roc_auc")` no melhor
-   (LGBM: `num_leaves`, `min_child_samples`, `reg_lambda`, `learning_rate`, `n_estimators`).
-   Curva treino × validação (n_estimators) → `images/modelo_aluno_curva_overfit.png`.
-4. Métricas no **holdout** + **`group_cv()` com `groups=sp.groups_train`** (esperar
-   AUC menor — é o número honesto). Curva de calibração + matriz de confusão em `images/`.
-5. Threshold: maximizar F1 **ou** custo assimétrico (FN = criança em risco não sinalizada
-   pesa mais) — justificar em D9.
-6. Salvar `models/modelo_aluno.joblib`; tabela em `reports/resultados_modelos.md`;
-   `PROGRESS.md`; PR `feat(model): modelo supervisionado de alfabetização por aluno com validação estratificada e por município`.
+1. **Renomear para o esquema genérico em t** (função `montar_matriz_t(features, targets, t)`):
+   `resultado_t1`, `resultado_t2`, `delta_t1`, `meta_t`, `esforco_t`, `atingiu_t1`;
+   demais features (Censo/IBGE/ADH/território) estáticas. **Dropar** colunas de ano
+   explícito (`pc_alfabetizado_2023/2024`, `meta_2025/2026`, `delta_2023_2024`,
+   `gap_meta_2024`, `esforco_2025`, `ambicao_2030`, `atingiu_meta_2024`) para não
+   duplicar informação nem vazar 2025 — conferir com `assert_no_leakage`.
+2. Treino t=2025: `X = montar_matriz_t(..., 2025)`, `y = atingiu_meta_2025` de
+   `targets_municipio.parquet` (5.417 rotulados, 72,5 % positivos — G5).
+   `split_municipio` (dropa nulos) + `StratifiedKFold(5)`.
+3. Candidatos: dummy, `LogisticRegression(balanced, scale=True)`, `HistGB`, `RF`, `LGBM`.
+   `RandomizedSearchCV(n_iter=25, scoring="roc_auc")`. Base pequena → treino rápido,
+   pode usar `RepeatedStratifiedKFold` para reduzir variância.
+4. **Ablação obrigatória** (risco "fácil demais" por inércia de `resultado_t1`):
+   treinar também **sem histórico** (só contexto socioeconômico) e reportar as duas
+   AUCs lado a lado. Mostra o valor incremental do socioeconômico.
+5. Métricas: ROC-AUC, **PR-AUC da classe não-atingiu** (`pr_auc_risco`), Brier,
+   calibração (se ECE alto, `CalibratedClassifierCV(method="isotonic")` — aqui as
+   probabilidades viram ranking de prioridade, então calibração importa mais que na Fase 4).
+6. `predict_2026.py`: `montar_matriz_t(..., 2026)` com `resultado_t1 =
+   pc_alfabetizado_aeeb_2025` (de `targets_municipio`), `meta_t = meta_2026`;
+   `predict_proba` → `reports/ranking_risco_2026.csv`
+   (`co_municipio, no_municipio, sg_uf, p_nao_atingir_2026, meta_2026, pc_2025, esforco_2026`),
+   ordenado desc. Top-50 vai para o README.
+7. Sanidade: `Spearman(p_nao_atingir_2026, esforco_2026) > 0` forte; quem não
+   atingiu 2025 deve ter risco médio 2026 maior. Registrar em D13.
+8. Salvar `models/modelo_risco_meta.joblib`; `reports/resultados_modelo_risco_meta.md`;
+   imagens `modelo_meta_01..`; `PROGRESS.md`; PR
+   `feat(model): modelo de risco de não atingimento de meta com backtest 2025 e projeção 2026`.
 
-**Expectativa (G3, ICC≈0,08): AUC 0,62–0,72.** Enquadrar como "risco contextual".
+Cuidados já conhecidos: `atingiu_meta_2025` é boolean nullable → `dropna().astype(int)`;
+`porte` é `category` com NaN; `groupby(observed=True)`.
 
 ### Fluxo de PR usado (repetir)
 ```powershell
@@ -181,11 +233,8 @@ git checkout main -q; git pull -q
 
 ## 6. Lembretes para as fases seguintes
 
-- **Fase 4 (aluno):** amostrar 400k estratificado por `(sg_uf, in_alfabetizado)`
-  para experimentação; baselines Dummy → LogReg → HistGB/LGBM → RF;
-  `RandomizedSearchCV(n_iter=25, scoring="roc_auc")`; reportar ROC-AUC, PR-AUC,
-  F1, balanced acc, Brier, calibração, matriz de confusão **e GroupKFold**.
-  AUC esperada 0,62–0,72 (ver G3) — explicar, não maquiar.
+- **Fase 4 (aluno) — feito.** Não retreinar sem motivo (33 min). Se precisar do
+  modelo: `joblib.load(MODELS_DIR / "modelo_aluno.joblib")["pipeline"]`.
 - **Fase 5 (meta):** renomear features para o esquema genérico em `t`
   (`resultado_t1`, `resultado_t2`, `delta_t1`, `meta_t`, `esforco_t`, `atingiu_t1`).
   Treino t=2025 → projeção t=2026 com `meta_2026` e `pc_alfabetizado_aeeb_2025`
@@ -193,6 +242,11 @@ git checkout main -q; git pull -q
   Sanidade: Spearman(`p_nao_atingir_2026`, `esforco_2026`) > 0.
 - **Fase 6 (clusters):** excluir metas e UF/região do fit; k ∈ [3..8] por silhouette;
   validar H5 *a posteriori*.
-- **Fase 7:** marcar H1–H5 como confirmada/refutada/parcial em `reports/resultados_modelos.md`.
+- **Fase 7:** permutation importance + SHAP nos dois modelos (Modelo A: usar amostra
+  ≤20k do holdout — SHAP em HistGB via `shap.TreeExplainer` funciona; passar `X` já
+  transformado por `pipe.named_steps["pre"]` e nomes via `get_feature_names`). Marcar
+  H1–H5 como confirmada/refutada/parcial em `reports/resultados_modelos.md`.
+- **Fase 8 (opcional):** recalibrar Modelo A (`CalibratedClassifierCV`, isotônica) se
+  o README quiser citar probabilidades absolutas — hoje ECE 0,147.
 - **Fase 8:** README com as 5 perguntas de negócio respondidas **com números** +
   `run_all.py` fim a fim + `docs/roteiro_video.md`.
