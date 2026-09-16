@@ -186,3 +186,35 @@ checagens de coerência antes de virar ranking de gestão.
    atingimento 2025 do país (27,9% vs 72,5% nacional) e esforço 2026 médio de
    +10,5 p.p. (Brasil: −3,4). O top-100 do ranking ter 88 municípios do RS
    reflete o choque real de 2025 no estado — registrado para defesa no vídeo.
+
+## D14 — Escopo reduzido de entrega (decisão de última hora, urgente)
+
+**Contexto:** na reta final do prazo restava ~1 hora de trabalho efetivo e
+faltavam as Fases 6 (clusters), 7 (interpretabilidade) e 8 (README +
+`run_all.py`). O plano original previa SHAP completo (beeswarm, dependence,
+waterfall), UMAP/mapas de clusters, notebook de interpretabilidade e roteiro
+de vídeo — inviáveis no tempo restante sem sacrificar a qualidade do núcleo.
+
+**Decisão (acordada com o stakeholder):** entregar o **mínimo funcional que
+cobre todos os requisitos nominais do enunciado**, nesta ordem de prioridade:
+
+1. **Fase 6 enxuta** — KMeans k∈[3..8] por silhouette, sem UMAP/mapa; perfil
+   dos clusters em tabela + `reports/clusters_municipios.csv`.
+2. **Fase 7 light** — **permutation importance** nos dois modelos (satisfaz
+   "interpretabilidade" e responde às perguntas de fatores/variáveis) +
+   **SHAP apenas no Modelo B** (logreg, 5,4k linhas — `LinearExplainer` é
+   instantâneo, cobre o requisito nominal de SHAP). SHAP do Modelo A
+   (HistGB, 400k linhas) fica como evolução futura.
+3. **Fase 8** — README respondendo às 5 perguntas de negócio **com números já
+   apurados** + `run_all.py` reproduzível. `train_aluno` (33 min) fica fora
+   do `run_all` padrão (flag opcional), documentado.
+4. **Cortes explícitos:** mapas/UMAP, notebook de interpretabilidade,
+   recalibração do Modelo A (ECE 0,147 — documentado como limitação),
+   roteiro de vídeo e apresentação.
+
+**Justificativa:** todos os números necessários às 5 perguntas já existem
+(Fases 4–5); o que faltava era cobertura nominal dos requisitos
+"clusterização", "SHAP" e "pipeline reproduzível". Preferiu-se cobrir todos
+os requisitos com profundidade reduzida a entregar poucos requisitos com
+profundidade total — o critério de avaliação é de conformidade + clareza,
+não de exaustão técnica.
