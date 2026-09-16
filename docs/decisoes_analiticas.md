@@ -93,3 +93,68 @@ Cada modelo reporta **holdout estratificado 80/20 + `StratifiedKFold(5)`**
 — generalização para território nunca visto, que é o número relevante para
 o gestor público.
 
+## D9 — Threshold por custo assimétrico 5:1 (falso negativo de risco pesa mais)
+
+**Contexto:** o threshold 0,5 é arbitrário e, com 66,2% de positivos, joga o
+modelo para "prever alfabetizado". Os dois erros têm consequências muito
+diferentes em política pública:
+
+| Erro | Significado | Custo real |
+|------|-------------|------------|
+| `miss_risco` (y=0 previsto como 1) | criança em risco **não** é sinalizada | perde-se a janela de intervenção no ciclo de alfabetização; dano é cumulativo e de difícil reversão |
+| `falso_alarme` (y=1 previsto como 0) | criança já alfabetizada recebe reforço | desperdício marginal de recurso pedagógico, sem dano à criança |
+
+**Decisão:** além do threshold que maximiza F1, reportar e adotar como
+threshold operacional o que **minimiza o custo esperado** com razão
+**5:1** (`CUSTO_MISS_RISCO=5`, `CUSTO_FALSO_ALARME=1`) em
+`best_threshold_cost()`. A razão 5:1 é uma escolha de política — declarada,
+não estimada — e é parâmetro do código: o gestor pode recalibrá-la conforme
+o orçamento de reforço disponível. Ambos os thresholds são serializados no
+`joblib` junto com o pipeline.
+
+**Consequência:** o threshold ótimo por custo fica **acima** de 0,5
+(≈0,70), o que aumenta `recall_risco` — captura-se mais crianças em risco ao
+preço de mais falsos alarmes. Isso é o trade-off desejado.
+
+## D10 — Métricas espelhadas na classe de risco
+
+**Contexto:** a classe positiva do target (`in_alfabetizado = 1`) é a classe
+majoritária e **não** é a classe de interesse. ROC-AUC e PR-AUC padrão
+descrevem a habilidade de identificar quem *vai* se alfabetizar.
+
+**Decisão:** `evaluate_binary()` reporta, além das métricas convencionais,
+`pr_auc_risco`, `f1_risco`, `precision_risco` e `recall_risco`, calculadas
+com `(1-y, 1-p)` — isto é, tratando **não alfabetizado como positivo**. As
+tabelas do relatório mostram as duas direções; a leitura de política pública
+usa a versão `_risco`. Regularização e calibração (`brier`, ECE) também são
+reportadas porque a probabilidade será usada como **ranking de prioridade**,
+não só como rótulo.
+
+## D11 — Correlação municipal reportada com e sem corte de massa amostral
+
+**Contexto:** a validação mais informativa do Modelo A é comparar a média das
+probabilidades por município com a taxa observada de alfabetização. Mas a taxa
+observada em uma amostra de `n` alunos tem desvio binomial ≈ 0,5/√n: com ~11
+alunos por município (amostra de 400k em 5,4 mil municípios), o "observado" é
+majoritariamente ruído, o que deprime a correlação **por construção**.
+
+**Decisão:** reportar a correlação de Pearson/Spearman no conjunto completo
+**e** restrita a municípios com `n_alunos ≥ 30` no holdout
+(`_correlacoes_municipais`). A segunda é a leitura honesta da capacidade de
+ordenar municípios por risco; a primeira é mantida para não dar impressão de
+*cherry-picking*. O CSV completo
+(`reports/modelo_aluno_agregado_municipal.csv`) permite auditoria.
+
+## D12 — Amostragem estratificada de 400k para experimentação
+
+**Contexto:** 1,94M × 55 features × 5 folds × 25 iterações de busca é
+proibitivo em notebook local, e o ganho estatístico é nulo — o erro padrão de
+uma AUC com 400k observações já é da ordem de 0,001.
+
+**Decisão:** `sample_aluno(n=400_000)` estratificado por `(sg_uf,
+in_alfabetizado)` preserva composição territorial e balanceamento de classes;
+a comparação de candidatos e a busca de hiperparâmetros rodam em 150k
+(`cv_sample`) e o **refit final** usa os 320k do treino do holdout. A base
+completa pode ser usada com `--n-sample 0`. Toda a amostragem é semeada
+(`SEED=42`) e coberta por teste de reprodutibilidade.
+
