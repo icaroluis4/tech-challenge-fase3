@@ -189,4 +189,4 @@ reports/                 # EDA, resultados A/B, ranking 2026, clusters, interpre
 
 ## Equipe
 
-Ícaro Luis — [github.com/icaroluis4/tech-challenge-fase3](https://github.com/icaroluis4/tech-challenge-fase3)
+Icaro Luis — [github.com/icaroluis4/tech-challenge-fase3](https://github.com/icaroluis4/tech-challenge-fase3)
